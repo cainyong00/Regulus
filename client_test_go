@@ -1,0 +1,876 @@
+package client_test
+
+// You MUST NOT change these default imports.  ANY additional imports may
+// break the autograder and everyone will be sad.
+
+import (
+	// Some imports use an underscore to prevent the compiler from complaining
+	// about unused imports.
+	_ "encoding/hex"
+	_ "errors"
+	_ "strconv"
+	_ "strings"
+	"testing"
+
+	// A "dot" import is used here so that the functions in the ginko and gomega
+	// modules can be used without an identifier. For example, Describe() and
+	// Expect() instead of ginko.Describe() and gomega.Expect().
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	userlib "github.com/cs161-staff/project2-userlib"
+
+	"github.com/cs161-staff/project2-starter-code/client"
+)
+
+func TestSetupAndExecution(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Client Tests")
+}
+
+// ================================================
+// Global Variables (feel free to add more!)
+// ================================================
+const defaultPassword = "password"
+const notDefaultPassword = "notpassword"
+const emptyString = ""
+const contentOne = "Bitcoin is Nick's favorite "
+const contentTwo = "digital "
+const contentThree = "cryptocurrency!"
+const contentFour = "more content!"
+
+// ================================================
+// Describe(...) blocks help you organize your tests
+// into functional categories. They can be nested into
+// a tree-like structure.
+// ================================================
+
+var _ = Describe("Client Tests", func() {
+
+	// A few user declarations that may be used for testing. Remember to initialize these before you
+	// attempt to use them!
+	var alice *client.User
+	var bob *client.User
+	var charles *client.User
+	var doris *client.User
+	var eve *client.User
+	var frank *client.User
+	// var grace *client.User
+	// var horace *client.User
+	// var ira *client.User
+
+	// These declarations may be useful for multi-session testing.
+	var alicePhone *client.User
+	var aliceLaptop *client.User
+	var aliceDesktop *client.User
+
+	var err error
+
+	// A bunch of filenames that may be useful.
+	aliceFile := "aliceFile.txt"
+	bobFile := "bobFile.txt"
+	charlesFile := "charlesFile.txt"
+	dorisFile := "dorisFile.txt"
+	eveFile := "eveFile.txt"
+	frankFile := "frankFile.txt"
+	// graceFile := "graceFile.txt"
+	// horaceFile := "horaceFile.txt"
+	// iraFile := "iraFile.txt"
+
+	BeforeEach(func() {
+		// This runs before each test within this Describe block (including nested tests).
+		// Here, we reset the state of Datastore and Keystore so that tests do not interfere with each other.
+		// We also initialize
+		userlib.DatastoreClear()
+		userlib.KeystoreClear()
+	})
+
+	Describe("Basic Tests", func() {
+
+		Specify("Basic Test: Testing InitUser/GetUser on a single user.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Getting user Alice.")
+			aliceLaptop, err = client.GetUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+		})
+
+		Specify("Basic Test: Testing Single User Store/Load/Append.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Storing file data: %s", contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Appending file data: %s", contentTwo)
+			err = alice.AppendToFile(aliceFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Appending file data: %s", contentThree)
+			err = alice.AppendToFile(aliceFile, []byte(contentThree))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Loading file...")
+			data, err := alice.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+		})
+
+		Specify("Basic Test: Testing Create/Accept Invite Functionality with multiple users and multiple instances.", func() {
+			userlib.DebugMsg("Initializing users Alice (aliceDesktop) and Bob.")
+			aliceDesktop, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			bob, err = client.InitUser("bob", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Getting second instance of Alice - aliceLaptop")
+			aliceLaptop, err = client.GetUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("aliceDesktop storing file %s with content: %s", aliceFile, contentOne)
+			err = aliceDesktop.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("aliceLaptop creating invite for Bob.")
+			invite, err := aliceLaptop.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Bob appending to file %s, content: %s", bobFile, contentTwo)
+			err = bob.AppendToFile(bobFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("aliceDesktop appending to file %s, content: %s", aliceFile, contentThree)
+			err = aliceDesktop.AppendToFile(aliceFile, []byte(contentThree))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Checking that aliceDesktop sees expected file data.")
+			data, err := aliceDesktop.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+
+			userlib.DebugMsg("Checking that aliceLaptop sees expected file data.")
+			data, err = aliceLaptop.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+
+			userlib.DebugMsg("Checking that Bob sees expected file data.")
+			data, err = bob.LoadFile(bobFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+
+			userlib.DebugMsg("Getting third instance of Alice - alicePhone.")
+			alicePhone, err = client.GetUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Checking that alicePhone sees Alice's changes.")
+			data, err = alicePhone.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+		})
+
+		Specify("Basic Test: Testing Revoke Functionality", func() {
+			userlib.DebugMsg("Initializing users Alice, Bob, and Charlie.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			bob, err = client.InitUser("bob", defaultPassword)
+			Expect(err).To(BeNil())
+
+			charles, err = client.InitUser("charles", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			alice.StoreFile(aliceFile, []byte(contentOne))
+
+			userlib.DebugMsg("Alice creating invite for Bob for file %s, and Bob accepting invite under name %s.", aliceFile, bobFile)
+
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Checking that Alice can still load the file.")
+			data, err := alice.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+
+			userlib.DebugMsg("Checking that Bob can load the file.")
+			data, err = bob.LoadFile(bobFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+
+			userlib.DebugMsg("Bob creating invite for Charles for file %s, and Charlie accepting invite under name %s.", bobFile, charlesFile)
+			invite, err = bob.CreateInvitation(bobFile, "charles")
+			Expect(err).To(BeNil())
+
+			err = charles.AcceptInvitation("bob", invite, charlesFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Checking that Charles can load the file.")
+			data, err = charles.LoadFile(charlesFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+
+			userlib.DebugMsg("Alice revoking Bob's access from %s.", aliceFile)
+			err = alice.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Checking that Alice can still load the file.")
+			data, err = alice.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+
+			userlib.DebugMsg("Checking that Bob/Charles lost access to the file.")
+			_, err = bob.LoadFile(bobFile)
+			Expect(err).ToNot(BeNil())
+
+			_, err = charles.LoadFile(charlesFile)
+			Expect(err).ToNot(BeNil())
+
+			userlib.DebugMsg("Checking that the revoked users cannot append to the file.")
+			err = bob.AppendToFile(bobFile, []byte(contentTwo))
+			Expect(err).ToNot(BeNil())
+
+			err = charles.AppendToFile(charlesFile, []byte(contentTwo))
+			Expect(err).ToNot(BeNil())
+		})
+
+	})
+
+	Describe("Authentication Tests", func() {
+
+		Specify("Authentication Test: Testing invalid user credentials.", func() {
+			// Create user
+			userlib.DebugMsg("Initializing user Alice.")
+			_, err = client.InitUser("alice", defaultPassword)
+			// Try to login with incorrect password
+			userlib.DebugMsg("Attempting to login with incorrect password.")
+			_, err = client.GetUser("alice", notDefaultPassword)
+			// Expect error
+			Expect(err).ToNot(BeNil())
+		})
+
+		Specify("Authentication Test: Testing same username can't exist.", func() {
+			// Create a user
+			userlib.DebugMsg("Initializing user Alice.")
+			_, err = client.InitUser("alice", defaultPassword)
+			// Try to create user with same username
+			userlib.DebugMsg("Attempting to create user with same username")
+			_, err = client.InitUser("alice", defaultPassword)
+			// Expect error
+			Expect(err).ToNot(BeNil())
+		})
+
+		Specify("Authentication Test: Testing empty usernames are not valid.", func() {
+			// Try to create user with empty username
+			userlib.DebugMsg("Initializing user Alice with empty username.")
+			_, err = client.InitUser("", defaultPassword)
+			// Expect error
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Authentication Test: Testing initialized user not existing.", func() {
+			// Try to get user that does not exist
+			userlib.DebugMsg("Attempting to get a non-existing user.")
+			_, err = client.GetUser("alice", defaultPassword)
+			// Expect error
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Authentication Test: Testing integrity of user.", func() {
+			// User struct cannot be obtained due to malicious action,
+			// or the integrity of the user struct has been compromised.
+
+			// Create user
+			userlib.DebugMsg("Initializing user Alice")
+			_, err = client.InitUser("alice", defaultPassword)
+			datastoreMap := userlib.DatastoreGetMap()
+			var aliceUserKey userlib.UUID
+			for key := range datastoreMap {
+				aliceUserKey = key
+			}
+			
+			// Create second user
+			userlib.DebugMsg("Initializing user Bob")
+			_, err = client.InitUser("bob", defaultPassword)
+			// Directly modify alice's user data to bob's user data via Datastore
+			datastoreMap = userlib.DatastoreGetMap()
+			var bobUserKey userlib.UUID
+			for key := range datastoreMap {
+				if key != aliceUserKey {
+					bobUserKey = key
+				}
+			}
+
+			bobData, _ := userlib.DatastoreGet(bobUserKey)
+			userlib.DatastoreSet(aliceUserKey, bobData)
+			// Try to login to user
+			_, err = client.GetUser("alice", defaultPassword)
+			// Error because detected malicious action
+			Expect(err).ToNot(BeNil())
+		})
+	})
+
+	Describe("File Tests", func() {
+		
+		Specify("File Test: StoreFile: given file already exists, content should be overwritten.", func() {
+			// Create a user
+			userlib.DebugMsg("Initializing user Alice")
+			alice, err = client.InitUser("alice", defaultPassword)
+			
+			// User creates a file
+			userlib.DebugMsg("Storing file data: %s", contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			// Check that file has correct data
+			userlib.DebugMsg("Checking that file has changes before overwrite.")
+			data, err := alice.LoadFile(aliceFile)
+			userlib.DebugMsg("Data in file: %s", data)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+			
+			// User A calls StoreFile on file that already exists
+			userlib.DebugMsg("Storing file data: %s", contentTwo)
+			err = alice.StoreFile(aliceFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			// Overwrite succeeds and file is updated correctly in Datastore
+			userlib.DebugMsg("Checking that file has changes after overwrite.")
+			data, err = alice.LoadFile(aliceFile)
+			userlib.DebugMsg("Data in file: %s", data)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentTwo)))
+		})
+		Specify("File Test: LoadFile: Testing err if filename does not exist in personal namespace", func() {
+			// Create user
+			userlib.DebugMsg("Initializing user Alice")
+			alice, err = client.InitUser("alice", defaultPassword)
+
+			// User tries to load a filename that does not exist in personal namespace
+			userlib.DebugMsg("Trying to load a file that does not exist in personal namespace.")
+			_, err := alice.LoadFile(aliceFile)
+
+			// Errors via client API
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("File Test: AppendToFile: Testing err if filename does not exist in personal namespace", func() {
+			// Create user
+			userlib.DebugMsg("Initializing user Alice")
+			alice, err = client.InitUser("alice", defaultPassword)
+			
+			// User tries to append to a filename that does not exist in personal namespace
+			userlib.DebugMsg("Trying to append to a file that does not exist in personal namespace.")
+			err := alice.AppendToFile(aliceFile, []byte(contentOne))
+
+			// Errors via client API
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("File Test: Testing integrity of File Content.", func() {
+			// Create user
+			userlib.DebugMsg("Initializing user Alice")
+			alice, err = client.InitUser("alice", defaultPassword)
+
+			datastoreMap := userlib.DatastoreGetMap()
+			// see what key is here
+			var aliceUserKey userlib.UUID
+			for key := range datastoreMap {
+				aliceUserKey = key
+			}
+
+			// User creates a file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			alice.StoreFile(aliceFile, []byte(contentOne))
+
+			// Manipulate file content directly in Datastore
+			userlib.DebugMsg("Manipulating file content directly in datastore")
+			// find some key that was newly added for the file (not equal to aliceUserKey)
+			datastoreMap = userlib.DatastoreGetMap()
+			var storageKey userlib.UUID
+			for key := range datastoreMap {
+				if key != aliceUserKey {
+					storageKey = key
+					break
+				}
+			}
+			
+			oldData := datastoreMap[storageKey]
+			newData := []byte("some random new data")
+			Expect(oldData).ToNot(Equal(newData))
+			userlib.DatastoreSet(storageKey, newData)
+
+			// User calls LoadFile
+			userlib.DebugMsg("Checking that Alice cannot load the file.")
+			_, err = alice.LoadFile(aliceFile)
+			// Errors via client API
+			Expect(err).ToNot(BeNil())
+		})
+	})
+
+	Describe("Sharing Tests", func() {
+		Specify("Sharing Test: Testing nonunique filenames.", func() {
+			// User bob can have a file named alice.txt and user alice can have a file named alice.txt
+			// Create users alice and bob
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+			
+			// Create file in Alice's namespace
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			// Create file with same name in Bob's namespace
+			userlib.DebugMsg("Bob storing file %s with content: %s", aliceFile, contentTwo)
+			err = bob.StoreFile(aliceFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			// Both users can load their respective files
+			userlib.DebugMsg("Checking that Alice can load the file.")
+			data, err := alice.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+
+			userlib.DebugMsg("Checking that Bob can load the file.")
+			data, err = bob.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentTwo)))
+		})
+
+		Specify("Sharing Test: Testing authorized users can load, store, append, create.", func() {
+			//creating user Alice and Bob and Charles and Doris
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+			userlib.DebugMsg("Initializing user Charles")
+			charles, _ = client.InitUser("charles", defaultPassword)
+			userlib.DebugMsg("Initializing user Doris")
+			_, _ = client.InitUser("doris", defaultPassword)
+
+			//creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			// share with Bob
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			// Bob can: (testing one layer under owner)
+			// Overwrite file contents (StoreFile()).
+			err = bob.StoreFile(bobFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+			// Append additional contents to the file (AppendToFile()).
+			err = bob.AppendToFile(bobFile, []byte(contentThree))
+			Expect(err).To(BeNil())
+			// Read file contents (LoadFile()).
+			data, err := bob.LoadFile(bobFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentTwo + contentThree)))
+			// Share the file with other users (CreateInvitation()).
+			// Bob shares with Charles
+			userlib.DebugMsg("Bob creating invite for Charles.")
+			invite, err = bob.CreateInvitation(bobFile, "charles")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Charles accepting invite from Bob under filename %s.", charlesFile)
+			err = charles.AcceptInvitation("bob", invite, charlesFile)
+			Expect(err).To(BeNil())
+
+			// Charles can: (testing two layers under owner)
+			// Overwrite file contents (StoreFile()).
+			err = charles.StoreFile(charlesFile, []byte(contentThree))
+			Expect(err).To(BeNil())
+			// Append additional contents to the file (AppendToFile()).
+			err = charles.AppendToFile(charlesFile, []byte(contentFour))
+			Expect(err).To(BeNil())
+			// Read file contents (LoadFile()).
+			data, err = charles.LoadFile(charlesFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentThree + contentFour)))
+			// Share the file with other users (CreateInvitation()).
+			// Charles shares with Doris
+			userlib.DebugMsg("Charles creating invite for Doris.")
+			invite, err = charles.CreateInvitation(charlesFile, "doris")
+			Expect(err).To(BeNil())
+		})
+		Specify("Sharing Test: CreateInvitation: Testing err if filename doesn't exist in personal namespace", func() {
+			//creating user Alice and bob
+			userlib.DebugMsg("Initializing user Alice")
+			alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ =client.InitUser("bob", defaultPassword)
+
+			//create new invitation
+			userlib.DebugMsg("Creating invite for filename that doesnt exist")
+			_, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Sharing Test: CreateInvitation: Testing err if given recipientUsername doesn't exist", func() {
+			// create user Alice
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+
+			// Create file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+			
+			// Share with user who doesn't exist
+			userlib.DebugMsg("Alice creating invite for Bob, who doesn't exist.")
+		  _, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Sharing Test: AcceptInvitation: Testing err if given filename already exists in recipient's namespace", func() {
+			// Initialize user Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+			alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ =client.InitUser("bob", defaultPassword)
+
+			// Create file 1
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+			
+			// Create file 2
+			userlib.DebugMsg("Alice storing file %s with content: %s", bobFile, contentOne)
+			err = alice.StoreFile(bobFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			// Share file 1 with Bob, Bob accepts with bobFile name
+			userlib.DebugMsg("Alice creating invite for Bob for file %s.", aliceFile)
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+			
+			// Share file 2 with Bob, Bob accepts with bobFile name again, should error
+			userlib.DebugMsg("Alice creating invite for Bob for file %s.", bobFile)
+			_, err = alice.CreateInvitation(bobFile, "bob")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Sharing Test: AcceptInvitation: Testing err if recipient unable to verify senderUsername created the inv", func() {
+			//creating user alice, bob, and charles
+			userlib.DebugMsg("Initializing user Alice")
+			alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+			userlib.DebugMsg("Initializing user Charles")
+			charles, _ = client.InitUser("charles", defaultPassword)
+
+			//alice and charles creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			userlib.DebugMsg("Charles storing file %s with content: %s", charlesFile, contentOne)
+			err = charles.StoreFile(charlesFile, []byte(contentOne))
+			
+			//alice creates invite
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			_, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			//charles creates new invite
+			userlib.DebugMsg("Charles creating invite for Bob.")
+			invite2, err := charles.CreateInvitation(charlesFile, "bob")
+			Expect(err).To(BeNil())
+			
+			//Bob tries accepting invite from alice, but uses invite from charles
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite2, bobFile)
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Sharing Test: AcceptInvitation: Testing err if inv no longer valid due to revocation", func() {
+			// Initialize user Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+			alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ =client.InitUser("bob", defaultPassword)
+
+			// Create file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			// Share file with Bob
+			userlib.DebugMsg("Alice creating invite for Bob for file %s.", aliceFile)
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			
+			// Revoke file access before Bob accepts
+			userlib.DebugMsg("Alice revokes access for Bob")
+			err = alice.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			// Bob accepts with bobFile name but fails
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).ToNot(BeNil())
+		})
+		Specify("Sharing Test: AcceptInvitation: Testing err if recipient unable to verify integrity of inv obj", func() {
+			//creating user Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+
+			//creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+
+			//share with Bob
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			
+			//tamper with invite
+			userlib.DatastoreSet(invite, []byte("tampered"))
+
+			//try accepting invite
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).ToNot(BeNil())
+		})
+	})
+
+	Describe("Revocation Tests", func() {
+		Specify("Revocation Test: Testing owner can revoke access for user who hasn't accepted invitation.", func() {
+			//creating users Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+
+			//creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+
+			//create invitation for Bob
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			//revoke access for Bob
+			userlib.DebugMsg("Alice revokes access for Bob")
+			err = alice.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			// Check that Bob cannot accept invite
+			userlib.DebugMsg("Bob fails when accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).ToNot(BeNil())
+		})
+
+		Specify("Revocation Test: Testing all users below revoked user lose access.", func() {
+			// If Alice revokes access from Bob, then all of the following users MUST lose access: Bob, Doris, and Eve
+			// But Frank should not lose access
+			// Creating users
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+			userlib.DebugMsg("Initializing user Doris")
+			doris, _ = client.InitUser("doris", defaultPassword)
+			userlib.DebugMsg("Initializing user Eve")
+			eve, _ = client.InitUser("eve", defaultPassword)
+			userlib.DebugMsg("Initializing user Frank")
+			frank, _ = client.InitUser("frank", defaultPassword)
+
+			// Create new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+
+			// Alice shares with Bob and Frank
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice creating invite for Frank.")
+			invite, err = alice.CreateInvitation(aliceFile, "frank")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Frank accepting invite from Alice under filename %s.", frankFile)
+			err = frank.AcceptInvitation("alice", invite, frankFile)
+			Expect(err).To(BeNil())
+
+			// Bob shares with Doris
+			userlib.DebugMsg("Bob creating invite for Doris.")
+			invite, err = bob.CreateInvitation(bobFile, "doris")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Doris accepting invite from Bob under filename %s.", dorisFile)
+			err = doris.AcceptInvitation("bob", invite, dorisFile)
+			Expect(err).To(BeNil())
+
+			// Doris shares with Eve
+			userlib.DebugMsg("Doris creating invite for Eve.")
+			invite, err = doris.CreateInvitation(dorisFile, "eve")
+			Expect(err).To(BeNil())
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = eve.AcceptInvitation("doris", invite, eveFile)
+			Expect(err).To(BeNil())
+
+			// Alice revokes access from Bob
+			userlib.DebugMsg("Alice revokes access for Bob")
+			err = alice.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			
+			// Bob cannot access
+			userlib.DebugMsg("Checking that Bob cannot load the file.")
+			_, err = bob.LoadFile(bobFile)
+			Expect(err).ToNot(BeNil())
+			
+			// Doris cannot access
+			userlib.DebugMsg("Checking that Doris cannot load the file.")
+			_, err = doris.LoadFile(dorisFile)
+			Expect(err).ToNot(BeNil())
+
+			// Eve cannot access
+			userlib.DebugMsg("Checking that Eve cannot load the file.")
+			_, err = eve.LoadFile(eveFile)
+			Expect(err).ToNot(BeNil())
+
+			// Frank can still access
+			userlib.DebugMsg("Checking that Frank can load the file.")
+			data, err := frank.LoadFile(frankFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne)))
+		})
+
+		Specify("Revocation Test: Testing revoked users can't use client API on file.", func() {
+			// LoadFile() fails
+			// AppendtoFile() fails
+			// CreateInvitation() fails
+
+			//creating users Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+
+			//creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+
+			//create invitation for Bob
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			
+			// bob accepts invite
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			//revoke access for Bob
+			userlib.DebugMsg("Alice revokes access for Bob")
+			err = alice.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			//bob tries to load file
+			userlib.DebugMsg("Bob trying to load file %s", bobFile)
+			_, err = bob.LoadFile(bobFile)
+			Expect(err).ToNot(BeNil())
+
+			//bob tries to append to file
+			userlib.DebugMsg("Bob trying to append to file %s", bobFile)
+			err = bob.AppendToFile(bobFile, []byte(contentTwo))
+			Expect(err).ToNot(BeNil())
+
+			//bob tries to create invitation
+			userlib.DebugMsg("Bob trying to create invitation for Alice")
+			_, err = bob.CreateInvitation(bobFile, "alice")
+			Expect(err).ToNot(BeNil())								
+		})
+		Specify("Revocation Test: RevokeAccess: Testing err if given filename doesn't exist in personal namespace", func() {
+			//creating users Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+
+			//creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+
+			//create invitation for Bob
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			// bob accepts invite
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+			
+			// try to revoke access, wrong filename
+			userlib.DebugMsg("Alice revokes access for Bob")
+			err = alice.RevokeAccess("wrongfilename", "bob")
+			Expect(err).ToNot(BeNil())
+			
+		})
+		Specify("Revocation Test: RevokeAccess: Testing err if given filename not currently shared with recipientUsername", func() {
+			//creating users Alice and Bob
+			userlib.DebugMsg("Initializing user Alice")
+	 		alice, _ = client.InitUser("alice", defaultPassword)
+			userlib.DebugMsg("Initializing user Bob")
+			bob, _ = client.InitUser("bob", defaultPassword)
+
+			//creating new file
+			userlib.DebugMsg("Alice storing file %s with content: %s", aliceFile, contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+
+			//create invitation for Bob
+			userlib.DebugMsg("Alice creating invite for Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			// bob accepts invite
+			userlib.DebugMsg("Bob accepting invite from Alice under filename %s.", bobFile)
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			// try to revoke access, wrong recipientUsername
+			userlib.DebugMsg("Alice tries to revoke access for Charles")
+			err = alice.RevokeAccess(aliceFile, "charles")
+			Expect(err).ToNot(BeNil())
+			
+		})
+	})
+
+	Describe("User Session Tests", func() {
+		Specify("User Session Test: Testing support single user having multiple active sessions.", func() {
+			// All file changes MUST be reflected in all current user sessions immediately
+			// (i.e. without terminating the current session and re-authenticating).
+
+			// EXAMPLE
+			// Bob runs the client application on his laptop and calls InitUser() to create session bobLaptop.
+			// Bob wants to run the client application on his tablet, so he calls GetUser on his tablet to get bobTablet.
+			// Using bobLaptop, Bob stores a file file1.txt. Session bobTablet must be able to download file1.txt.
+			// Using bobTablet, Bob appends to file1.txt. Session bobLaptop must be able to download the updated version.
+			// Using bobLaptop, Bob accepts an invitation to access a file and calls the file file2.txt in his personal namespace. Bob must be able to load the corresponding file2.txt using bobTablet.
+		})
+		
+		Specify("User Session Test: Testing support multiple users using application at same time.", func() {
+			// Bob and Alice can each run the client application on their own devices at the same time.
+		})
+	})
+})
